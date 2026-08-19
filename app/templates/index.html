@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notula — Generator MoM</title>
+<style>
+  :root{
+    --ink:#1c2430; --ink-soft:#5a6675; --line:#dde3ea;
+    --paper:#fbfcfe; --panel:#ffffff; --field:#f4f7fb;
+    --accent:#1f6f5c;        /* hijau teal — bukan terracotta default */
+    --accent-soft:#e4f1ec;
+    --amber:#b7791f; --danger:#b3382e;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(28,36,48,.04),0 8px 28px rgba(28,36,48,.06);
+    --mono:"SFMono-Regular",ui-monospace,"Cascadia Code",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--paper);color:var(--ink);line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  header.top{
+    border-bottom:1px solid var(--line);background:var(--panel);
+    padding:18px 26px;display:flex;align-items:baseline;gap:14px;
+    position:sticky;top:0;z-index:20;
+  }
+  header.top .mark{
+    font-weight:700;font-size:19px;letter-spacing:-.02em;
+  }
+  header.top .mark b{color:var(--accent)}
+  header.top .tag{
+    font-size:12.5px;color:var(--ink-soft);
+    border-left:1px solid var(--line);padding-left:14px;
+  }
+  .wrap{max-width:960px;margin:0 auto;padding:30px 24px 80px}
+  .lead{color:var(--ink-soft);font-size:14.5px;margin:0 0 26px;max-width:620px}
+  .lead b{color:var(--ink);font-weight:600}
+
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:22px 22px 24px;margin-bottom:20px;
+  }
+  .card h2{
+    margin:0 0 3px;font-size:11px;text-transform:uppercase;letter-spacing:.09em;
+    color:var(--accent);font-weight:700;display:flex;align-items:center;gap:9px;
+  }
+  .card h2 .n{
+    font-family:var(--mono);font-size:11px;color:var(--ink-soft);
+    border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-weight:600;
+  }
+  .card .sub{color:var(--ink-soft);font-size:13px;margin:0 0 18px}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+  .grid .full{grid-column:1/-1}
+  label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:var(--ink)}
+  input[type=text],input[type=date],input[type=time],textarea,select{
+    width:100%;border:1px solid var(--line);background:var(--field);
+    border-radius:8px;padding:9px 11px;font-size:14px;color:var(--ink);
+    font-family:inherit;transition:border-color .15s,background .15s;
+  }
+  input:focus,textarea:focus,select:focus{
+    outline:none;border-color:var(--accent);background:#fff;
+    box-shadow:0 0 0 3px var(--accent-soft);
+  }
+  textarea{resize:vertical;min-height:96px}
+  select{appearance:none;cursor:pointer;
+    background-image:url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%235a6675' d='M1 1.5 6 6.5l5-5'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 11px center;padding-right:32px}
+  input[type=date],input[type=time]{cursor:pointer}
+  input[type=date]::-webkit-calendar-picker-indicator,
+  input[type=time]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.55}
+  input.bad,input.bad:focus{border-color:var(--danger);box-shadow:0 0 0 3px #fbe9e7}
+
+  .fieldnote{font-size:12px;color:var(--ink-soft);margin-top:5px;min-height:16px}
+  .fieldnote b{color:var(--ink);font-weight:600}
+  .fielderr{
+    display:none;font-size:12.5px;color:var(--danger);margin-top:5px;font-weight:600;
+  }
+  .fielderr.on{display:block}
+
+  /* Kehadiran & next meeting rows */
+  .group{border:1px solid var(--line);border-radius:8px;padding:13px;margin-bottom:11px;background:var(--field)}
+  .group .row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start;margin-bottom:9px}
+  .group textarea{min-height:64px;background:#fff}
+  .btn-x{
+    border:1px solid var(--line);background:#fff;color:var(--danger);
+    border-radius:7px;width:32px;height:32px;cursor:pointer;font-size:15px;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .btn-x:hover{background:#fff4f3;border-color:#f0c8c4}
+  .add{
+    border:1px dashed var(--line);background:transparent;color:var(--accent);
+    border-radius:8px;padding:8px 13px;font-size:13px;font-weight:600;cursor:pointer;
+    font-family:inherit;
+  }
+  .add:hover{background:var(--accent-soft);border-color:var(--accent)}
+  .nm-row{display:grid;grid-template-columns:2fr 1fr 1.4fr auto;gap:9px;margin-bottom:9px}
+
+  /* Dropzone */
+  .drop{
+    border:1.5px dashed var(--line);border-radius:10px;padding:26px 20px;
+    text-align:center;cursor:pointer;background:var(--field);transition:.15s;
+  }
+  .drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+  .drop .ic{font-size:26px;margin-bottom:6px}
+  .drop .main{font-size:14px;font-weight:600}
+  .drop .sub2{font-size:12.5px;color:var(--ink-soft);margin-top:3px}
+  .drop.has{border-style:solid;border-color:var(--accent);background:var(--accent-soft)}
+  .drop.sm{padding:18px 16px}
+  .drop.sm .ic{font-size:21px;margin-bottom:4px}
+  .drop.sm .main{font-size:13.5px}
+  #fileInput,#pdfInput{display:none}
+
+  .actions{display:flex;gap:12px;align-items:center;margin-top:6px}
+  .btn{
+    background:var(--accent);color:#fff;border:none;border-radius:9px;
+    padding:12px 22px;font-size:14.5px;font-weight:600;cursor:pointer;
+    font-family:inherit;letter-spacing:.01em;transition:.15s;
+  }
+  .btn:hover{background:#195a4b}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .hint{font-size:12.5px;color:var(--ink-soft)}
+
+  /* progress panel */
+  #progress{display:none}
+  .steps{list-style:none;padding:0;margin:14px 0 0}
+  .steps li{
+    display:flex;align-items:center;gap:11px;padding:7px 0;
+    font-size:13.5px;color:var(--ink-soft);
+  }
+  .steps li .dot{
+    width:18px;height:18px;border-radius:50%;border:2px solid var(--line);
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;
+  }
+  .steps li.active{color:var(--ink);font-weight:600}
+  .steps li.active .dot{border-color:var(--accent)}
+  .steps li.done .dot{background:var(--accent);border-color:var(--accent);color:#fff}
+  .bar{height:7px;border-radius:5px;background:var(--field);overflow:hidden;margin-top:14px}
+  .bar > i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s}
+  .result{display:none;margin-top:16px;padding:16px;border-radius:9px;background:var(--accent-soft);border:1px solid #cfe6dd}
+  .result a{
+    display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
+    padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px;margin-top:4px;
+  }
+  .err{color:var(--danger);font-size:13.5px;margin-top:10px;display:none}
+  details.tr{margin-top:12px;font-size:13px}
+  details.tr summary{cursor:pointer;color:var(--accent);font-weight:600}
+  details.tr pre{
+    white-space:pre-wrap;background:var(--field);border:1px solid var(--line);
+    border-radius:8px;padding:12px;font-size:12.5px;max-height:240px;overflow:auto;margin-top:8px;
+  }
+  .note{
+    font-size:12.5px;color:var(--amber);background:#fdf6e9;border:1px solid #f0e0bf;
+    border-radius:8px;padding:10px 12px;margin-top:14px;
+  }
+  @media(max-width:680px){.grid{grid-template-columns:1fr}.nm-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="mark">Notula<b>·</b>MoM</div>
+  <div class="tag">Rekaman rapat → notula terstruktur, diproses lokal</div>
+</header>
+
+<div class="wrap">
+  <p class="lead">
+    Isi identitas rapat, unggah rekaman dan/atau catatan kasar, lalu sistem akan
+    <b>mentranskripsi</b> (Whisper, lokal di GPU) dan <b>menyusun MoM</b> (GPT-5 nano) dalam format
+    Word yang siap dikirim. Kolom di bawah yang Anda isi sendiri; isi diskusi &
+    tindak lanjut digenerate otomatis.
+  </p>
+
+  <!-- 1. Identitas -->
+  <div class="card">
+    <h2><span class="n">01</span> Identitas Rapat</h2>
+    <p class="sub">Bagian header MoM — diisi manual.</p>
+    <div class="grid">
+      <div class="full">
+        <label>Klien</label>
+        <input type="text" id="klien" placeholder="Nama klien / instansi">
+      </div>
+      <div class="full">
+        <label>Penugasan</label>
+        <input type="text" id="penugasan" placeholder="Nama proyek / penugasan">
+      </div>
+      <div class="full">
+        <label>Topik</label>
+        <input type="text" id="topik" placeholder="Topik diskusi rapat">
+      </div>
+      <div>
+        <label for="tanggal">Hari, Tanggal</label>
+        <input type="date" id="tanggal" oninput="updateTanggal()">
+        <div class="fieldnote" id="tanggalPreview">Nama hari terisi otomatis.</div>
+      </div>
+      <div>
+        <label for="metode">Metode Rapat</label>
+        <select id="metode">
+          <option value="" disabled selected>— pilih metode —</option>
+          <option value="Offline">Offline</option>
+          <option value="Online">Online</option>
+          <option value="Hybrid">Hybrid</option>
+        </select>
+        <div class="fieldnote"></div>
+      </div>
+      <div>
+        <label for="jam_mulai">Jam Mulai</label>
+        <input type="time" id="jam_mulai" oninput="updateJam()">
+      </div>
+      <div>
+        <label for="jam_selesai">Jam Selesai</label>
+        <input type="time" id="jam_selesai" oninput="updateJam()">
+      </div>
+      <div class="full">
+        <div class="fieldnote" id="jamPreview">Jam selesai harus lebih besar dari jam mulai.</div>
+        <div class="fielderr" id="jamErr"></div>
+      </div>
+      <div class="full">
+        <label>Lokasi</label>
+        <input type="text" id="lokasi" placeholder="mis. Microsoft Teams / Ruang Rapat Lt. 5">
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Kehadiran -->
+  <div class="card">
+    <h2><span class="n">02</span> Kehadiran</h2>
+    <p class="sub">Kelompokkan peserta per instansi. Satu nama per baris.</p>
+    <div id="kehadiranList"></div>
+    <button class="add" onclick="addGroup()">+ Tambah grup instansi</button>
+  </div>
+
+  <!-- 3. Sumber -->
+  <div class="card">
+    <h2><span class="n">03</span> Sumber Notula</h2>
+    <p class="sub">Unggah rekaman, catatan kasar, atau keduanya.</p>
+    <div class="drop" id="drop" onclick="fileInput.click()">
+      <div class="ic">🎙️</div>
+      <div class="main" id="dropMain">Tarik rekaman ke sini atau klik untuk pilih</div>
+      <div class="sub2">Audio/Video — mp3, wav, m4a, mp4, dll.</div>
+    </div>
+    <input type="file" id="fileInput" accept="audio/*,video/*">
+    <div class="full" style="margin-top:16px">
+      <label>Catatan kasar (opsional)</label>
+      <textarea id="catatan" placeholder="Poin-poin mentah yang Anda tulis saat rapat. Membantu akurasi jika rekaman kurang jelas."></textarea>
+      <div class="fieldnote">Boleh diketik di atas, diunggah sebagai PDF di bawah, atau keduanya.</div>
+    </div>
+    <div class="drop sm" id="pdfDrop" onclick="pdfInput.click()" style="margin-top:10px">
+      <div class="ic">📄</div>
+      <div class="main" id="pdfMain">Tarik catatan PDF ke sini atau klik untuk pilih</div>
+      <div class="sub2">PDF berisi teks — hasil scan/gambar tidak bisa dibaca.</div>
+    </div>
+    <input type="file" id="pdfInput" accept="application/pdf,.pdf">
+  </div>
+
+  <!-- 4. Next meeting -->
+  <div class="card">
+    <h2><span class="n">04</span> Rencana Rapat Berikutnya <span style="text-transform:none;letter-spacing:0;color:var(--ink-soft);font-weight:400">(opsional)</span></h2>
+    <div id="nmList"></div>
+    <button class="add" onclick="addNm()">+ Tambah baris</button>
+  </div>
+
+  <div class="actions">
+    <button class="btn" id="genBtn" onclick="generate()">Buat MoM</button>
+    <span class="hint">Transkripsi berjalan lokal di GPU Anda.</span>
+  </div>
+
+  <!-- progress -->
+  <div class="card" id="progress" style="margin-top:22px">
+    <h2><span class="n">→</span> Proses</h2>
+    <ul class="steps">
+      <li data-step="transcribe"><span class="dot"></span> Transkripsi audio (Whisper)</li>
+      <li data-step="summarize"><span class="dot"></span> Menyusun MoM (GPT-5 nano)</li>
+      <li data-step="docx"><span class="dot"></span> Membuat dokumen Word</li>
+    </ul>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="err" id="errBox"></div>
+    <div class="result" id="resultBox">
+      <div style="font-weight:600;margin-bottom:6px">MoM siap diunduh.</div>
+      <a id="dlLink" href="#">⬇ Unduh MoM (.docx)</a>
+      <details class="tr" id="trBox">
+        <summary>Lihat transkrip mentah</summary>
+        <pre id="trText"></pre>
+      </details>
+    </div>
+    <div class="note" id="noteBox" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const pdfInput  = document.getElementById('pdfInput');
+const drop = document.getElementById('drop');
+const pdfDrop = document.getElementById('pdfDrop');
+const MAX_PDF_MB = 25;
+
+let selectedFile = null;   // rekaman audio/video
+let selectedPdf  = null;   // catatan kasar berformat PDF
+
+const mb = n => (n/1048576).toFixed(1) + ' MB';
+
+function wireDrop(zone, input, onFile){
+  ['dragover','dragenter'].forEach(ev=>zone.addEventListener(ev,e=>{
+    e.preventDefault(); zone.classList.add('over');
+  }));
+  ['dragleave','drop'].forEach(ev=>zone.addEventListener(ev,e=>{
+    e.preventDefault(); zone.classList.remove('over');
+  }));
+  zone.addEventListener('drop', e=>{
+    if(e.dataTransfer.files.length) onFile(e.dataTransfer.files[0]);
+  });
+  input.addEventListener('change', e=>onFile(e.target.files[0] || null));
+}
+
+wireDrop(drop, fileInput, f=>{ selectedFile = f; updateDrop(); });
+wireDrop(pdfDrop, pdfInput, f=>{
+  if(f && !/\.pdf$/i.test(f.name)){
+    alert('Catatan kasar hanya menerima file berformat PDF.'); return;
+  }
+  if(f && f.size > MAX_PDF_MB*1048576){
+    alert('Ukuran PDF melebihi batas ' + MAX_PDF_MB + ' MB.'); return;
+  }
+  selectedPdf = f; updatePdfDrop();
+});
+
+function updateDrop(){
+  drop.classList.toggle('has', !!selectedFile);
+  document.getElementById('dropMain').textContent = selectedFile
+    ? '✓ ' + selectedFile.name + ' (' + mb(selectedFile.size) + ')'
+    : 'Tarik rekaman ke sini atau klik untuk pilih';
+}
+function updatePdfDrop(){
+  pdfDrop.classList.toggle('has', !!selectedPdf);
+  document.getElementById('pdfMain').textContent = selectedPdf
+    ? '✓ ' + selectedPdf.name + ' (' + mb(selectedPdf.size) + ')'
+    : 'Tarik catatan PDF ke sini atau klik untuk pilih';
+}
+
+/* ---------- Hari & Tanggal ---------- */
+const HARI  = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+const BULAN = ['Januari','Februari','Maret','April','Mei','Juni',
+               'Juli','Agustus','September','Oktober','November','Desember'];
+
+function hariTanggal(iso){
+  if(!iso) return '';
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  if(isNaN(dt.getTime())) return '';
+  return HARI[(dt.getDay()+6)%7] + ', ' + d + ' ' + BULAN[m-1] + ' ' + y;
+}
+function updateTanggal(){
+  const teks = hariTanggal(document.getElementById('tanggal').value);
+  document.getElementById('tanggalPreview').innerHTML =
+    teks ? '<b>' + teks + '</b>' : 'Nama hari terisi otomatis.';
+}
+
+/* ---------- Jam mulai / selesai ---------- */
+const toMin  = v => { if(!v) return null; const [h,m]=v.split(':').map(Number); return h*60+m; };
+const fmtJam = v => v ? v.slice(0,5).replace(':','.') : '';
+
+function jamValid(){
+  const a = toMin(document.getElementById('jam_mulai').value);
+  const b = toMin(document.getElementById('jam_selesai').value);
+  return !(a !== null && b !== null && b <= a);
+}
+function updateJam(){
+  const elM = document.getElementById('jam_mulai');
+  const elS = document.getElementById('jam_selesai');
+  const err = document.getElementById('jamErr');
+  const prev = document.getElementById('jamPreview');
+  const a = toMin(elM.value), b = toMin(elS.value);
+  const ok = jamValid();
+
+  err.classList.toggle('on', !ok);
+  elS.classList.toggle('bad', !ok);
+
+  if(!ok){
+    err.textContent = 'Jam selesai (' + fmtJam(elS.value) + ') harus lebih besar dari jam mulai ('
+                    + fmtJam(elM.value) + ').';
+    prev.textContent = '';
+  }else if(a !== null && b !== null){
+    const d = b - a, j = Math.floor(d/60), mnt = d % 60;
+    const durasi = (j ? j + ' jam ' : '') + (mnt ? mnt + ' menit' : (j ? '' : '0 menit'));
+    prev.innerHTML = '<b>' + fmtJam(elM.value) + ' - ' + fmtJam(elS.value)
+                   + ' WIB</b> · durasi ' + durasi.trim();
+  }else if(a !== null){
+    prev.innerHTML = '<b>' + fmtJam(elM.value) + ' - selesai WIB</b>';
+  }else{
+    prev.textContent = 'Jam selesai harus lebih besar dari jam mulai.';
+  }
+  document.getElementById('genBtn').disabled = !ok;
+}
+
+// Kehadiran
+function addGroup(grup='', orang=''){
+  const div=document.createElement('div');
+  div.className='group';
+  div.innerHTML=`
+    <div class="row">
+      <input type="text" class="kh-grup" placeholder="Nama instansi/tim" value="${grup}">
+      <button class="btn-x" onclick="this.closest('.group').remove()">×</button>
+    </div>
+    <textarea class="kh-orang" placeholder="Satu nama per baris">${orang}</textarea>`;
+  document.getElementById('kehadiranList').appendChild(div);
+}
+addGroup();
+
+// Next meeting
+function addNm(){
+  const div=document.createElement('div');
+  div.className='nm-row';
+  div.innerHTML=`
+    <input type="text" class="nm-nama" placeholder="Nama meeting">
+    <input type="text" class="nm-tgl" placeholder="Tanggal">
+    <input type="text" class="nm-cat" placeholder="Catatan">
+    <button class="btn-x" onclick="this.closest('.nm-row').remove()">×</button>`;
+  document.getElementById('nmList').appendChild(div);
+}
+
+function collectKehadiran(){
+  return [...document.querySelectorAll('#kehadiranList .group')].map(g=>({
+    grup: g.querySelector('.kh-grup').value.trim(),
+    orang: g.querySelector('.kh-orang').value.split('\n').map(s=>s.trim()).filter(Boolean)
+  })).filter(g=>g.grup||g.orang.length);
+}
+function collectNm(){
+  return [...document.querySelectorAll('#nmList .nm-row')].map(r=>({
+    nama: r.querySelector('.nm-nama').value.trim(),
+    tanggal: r.querySelector('.nm-tgl').value.trim(),
+    catatan: r.querySelector('.nm-cat').value.trim()
+  })).filter(m=>m.nama||m.tanggal||m.catatan);
+}
+
+const val = id=>document.getElementById(id).value.trim();
+
+async function generate(){
+  const catatan = val('catatan');
+  if(!selectedFile && !catatan && !selectedPdf){
+    alert('Unggah rekaman, isi catatan kasar, atau unggah catatan PDF terlebih dahulu.');
+    return;
+  }
+  if(!jamValid()){
+    alert('Jam selesai harus lebih besar dari jam mulai.');
+    document.getElementById('jam_selesai').focus();
+    return;
+  }
+  const fd = new FormData();
+  fd.append('klien', val('klien'));
+  fd.append('penugasan', val('penugasan'));
+  fd.append('topik', val('topik'));
+  fd.append('tanggal', val('tanggal'));
+  fd.append('jam_mulai', val('jam_mulai'));
+  fd.append('jam_selesai', val('jam_selesai'));
+  fd.append('metode', val('metode'));
+  fd.append('lokasi', val('lokasi'));
+  fd.append('kehadiran', JSON.stringify(collectKehadiran()));
+  fd.append('next_meetings', JSON.stringify(collectNm()));
+  fd.append('catatan', catatan);
+  if(selectedFile) fd.append('recording', selectedFile);
+  if(selectedPdf) fd.append('catatan_pdf', selectedPdf);
+
+  document.getElementById('genBtn').disabled = true;
+  document.getElementById('progress').style.display='block';
+  document.getElementById('resultBox').style.display='none';
+  document.getElementById('errBox').style.display='none';
+  resetSteps();
+  document.getElementById('progress').scrollIntoView({behavior:'smooth'});
+
+  let data;
+  try{
+    const res = await fetch('/api/generate',{method:'POST',body:fd});
+    data = await res.json();
+    if(!res.ok) throw new Error(data.detail || ('HTTP ' + res.status));
+  }catch(e){
+    showError(e.message);
+    return;
+  }
+  poll(data.job_id);
+}
+
+function showError(pesan){
+  const e = document.getElementById('errBox');
+  e.style.display='block';
+  e.textContent = 'Gagal: ' + pesan;
+  document.getElementById('genBtn').disabled = false;
+}
+
+function resetSteps(){
+  document.querySelectorAll('.steps li').forEach(li=>li.classList.remove('active','done'));
+  document.getElementById('barFill').style.width='0%';
+}
+function markSteps(step){
+  const order=['transcribe','summarize','docx'];
+  const map={'Transkripsi':'transcribe','Menyusun':'summarize','Word':'docx','Selesai':'docx'};
+  let cur=null;
+  for(const k in map){ if(step.includes(k)){cur=map[k];break;} }
+  const ci = order.indexOf(cur);
+  document.querySelectorAll('.steps li').forEach(li=>{
+    const i=order.indexOf(li.dataset.step);
+    li.classList.remove('active','done');
+    if(i<ci) li.classList.add('done');
+    else if(i===ci) li.classList.add('active');
+  });
+}
+
+async function poll(job_id){
+  const r = await fetch('/api/status/'+job_id);
+  const s = await r.json();
+  document.getElementById('barFill').style.width = s.progress+'%';
+  markSteps(s.step);
+
+  if(s.status==='error'){
+    showError(s.error);
+    return;
+  }
+  if(s.status==='done'){
+    document.querySelectorAll('.steps li').forEach(li=>li.classList.add('done'));
+    document.getElementById('barFill').style.width='100%';
+    document.getElementById('dlLink').href='/api/download/'+job_id;
+    document.getElementById('resultBox').style.display='block';
+    // transkrip
+    const tr = await (await fetch('/api/transcript/'+job_id)).json();
+    if(tr.transcript){
+      document.getElementById('trText').textContent = tr.transcript;
+    }else{
+      document.getElementById('trBox').style.display='none';
+    }
+    document.getElementById('genBtn').disabled=false;
+    return;
+  }
+  setTimeout(()=>poll(job_id), 1500);
+}
+</script>
+</body>
+</html>

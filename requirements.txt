@@ -1,0 +1,21 @@
+# Web
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+
+# Konfigurasi lewat file .env
+python-dotenv>=1.0
+
+# Dokumen
+python-docx>=1.1.0
+pypdf>=4.2                 # ekstraksi teks dari catatan kasar PDF
+
+# LLM penyusun MoM
+openai>=1.40               # OpenAI gpt-5-nano (default)
+requests>=2.31             # Ollama (backend lokal / fallback)
+
+# Transkripsi — faster-whisper (cepat & hemat memori)
+faster-whisper>=1.1.0
+
+# alternatif implementasi asli OpenAI (github.com/openai/whisper)
+# openai-whisper>=20231117

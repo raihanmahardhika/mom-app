@@ -1,0 +1,8 @@
+# Dependensi tambahan agar faster-whisper (CTranslate2) bisa memakai GPU NVIDIA
+# di Windows tanpa perlu memasang CUDA Toolkit secara manual.
+#
+#   pip install -r requirements-gpu.txt
+#
+# Terverifikasi untuk GPU dengan driver CUDA 12/13 (mis. GTX 1660 Ti, RTX 30xx/40xx).
+nvidia-cublas-cu12
+nvidia-cudnn-cu12>=9.0,<10
