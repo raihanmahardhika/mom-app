@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Token Usage — Notula MoM</title>
+<style>
+  :root{--ink:#1c2430;--ink-soft:#5a6675;--line:#dde3ea;--paper:#fbfcfe;--panel:#fff;--field:#f4f7fb;--accent:#1f6f5c;--accent-soft:#e4f1ec;--danger:#b3382e;--radius:10px;--shadow:0 1px 2px rgba(28,36,48,.04),0 8px 28px rgba(28,36,48,.06)}
+  *{box-sizing:border-box} body{margin:0;background:var(--paper);color:var(--ink);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+  header{display:flex;align-items:center;gap:14px;padding:18px 26px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .mark{font-size:19px;font-weight:700}.mark b{color:var(--accent)}.tag{padding-left:14px;border-left:1px solid var(--line);font-size:12.5px;color:var(--ink-soft)}
+  .back{margin-left:auto;color:var(--accent);font-size:13px;font-weight:600;text-decoration:none}.back:hover{text-decoration:underline}
+  main{max-width:1120px;margin:0 auto;padding:34px 24px 80px}h1{margin:0;font-size:26px;letter-spacing:-.025em}.lead{margin:7px 0 25px;color:var(--ink-soft);font-size:14px}
+  .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}.metric{min-height:106px;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow)}
+  .metric .label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)}.metric .value{margin-top:10px;font-size:26px;font-weight:700;letter-spacing:-.03em}.metric .hint{font-size:11.5px;color:var(--ink-soft)}
+  .card{padding:21px 22px 23px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow)}.card-head{display:flex;align-items:center;gap:12px;margin-bottom:15px}.card h2{margin:0;font-size:14px}.note{margin:0;color:var(--ink-soft);font-size:12.5px}.refresh{margin-left:auto;padding:7px 11px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--accent);font:600 12.5px inherit;cursor:pointer}.refresh:hover{background:var(--accent-soft);border-color:var(--accent)}
+  .table-wrap{overflow-x:auto}table{width:100%;min-width:850px;border-collapse:collapse;font-size:13px}th,td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font-size:10.5px;letter-spacing:.075em;text-transform:uppercase;color:var(--ink-soft);background:var(--field)}td.num{text-align:right;font-variant-numeric:tabular-nums}.model{font-weight:600}.sub{display:block;margin-top:2px;color:var(--ink-soft);font-size:11.5px}.state{display:inline-block;padding:2px 7px;border-radius:20px;background:var(--field);color:var(--ink-soft);font-size:11.5px;font-weight:600}.state.done{background:var(--accent-soft);color:var(--accent)}.state.error{background:#fff1f0;color:var(--danger)}.empty{padding:24px 0;text-align:center;color:var(--ink-soft);font-size:13px}.error{color:var(--danger)}
+  @media(max-width:850px){.summary{grid-template-columns:repeat(2,1fr)}.summary .metric:last-child{grid-column:1/-1}}@media(max-width:560px){header{padding:15px 18px}.tag{display:none}main{padding:28px 16px 64px}.summary{grid-template-columns:1fr}.summary .metric:last-child{grid-column:auto}}
+</style>
+</head>
+<body>
+<header>
+  <div class="mark">Notula<b>·</b>MoM</div>
+  <div class="tag">Riwayat pemakaian token</div>
+  <a class="back" href="/">← Kembali ke MoM</a>
+</header>
+<main>
+  <h1>Token Usage</h1>
+  <p class="lead">Model default: <b id="defaultModel">—</b>. Angka dicatat dari respons model yang benar-benar digunakan untuk setiap proses MoM.</p>
+  <section class="summary" aria-label="Ringkasan pemakaian token">
+    <div class="metric"><div class="label">Total</div><div class="value" id="totalTokens">—</div><div class="hint">token tercatat</div></div>
+    <div class="metric"><div class="label">Input</div><div class="value" id="promptTokens">—</div><div class="hint">prompt / catatan</div></div>
+    <div class="metric"><div class="label">Output</div><div class="value" id="completionTokens">—</div><div class="hint">hasil model</div></div>
+    <div class="metric"><div class="label">Reasoning</div><div class="value" id="reasoningTokens">—</div><div class="hint">bila dilaporkan model</div></div>
+    <div class="metric"><div class="label">Cached</div><div class="value" id="cachedTokens">—</div><div class="hint">bila tersedia</div></div>
+  </section>
+  <section class="card">
+    <div class="card-head">
+      <div><h2>Riwayat proses</h2><p class="note">Data disimpan secara lokal dan tetap tersedia setelah server direstart. Backend rule-based tidak menggunakan token.</p></div>
+      <button class="refresh" type="button" onclick="loadUsage()">↻ Perbarui</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Waktu / topik</th><th>Backend / model</th><th>Input</th><th>Output</th><th>Reasoning</th><th>Total</th><th>Status</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="7" class="empty">Memuat data…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script>
+const format = value => Number.isInteger(value) ? new Intl.NumberFormat('id-ID').format(value) : '—';
+const id = value => document.getElementById(value);
+function cell(text, className=''){const td=document.createElement('td');td.textContent=text;td.className=className;return td;}
+function setTotal(total){
+  id('totalTokens').textContent=format(total.total_tokens);
+  id('promptTokens').textContent=format(total.prompt_tokens);
+  id('completionTokens').textContent=format(total.completion_tokens);
+  id('reasoningTokens').textContent=format(total.reasoning_tokens);
+  id('cachedTokens').textContent=format(total.cached_tokens);
+}
+function renderJobs(jobs){
+  const body=id('rows');body.replaceChildren();
+  if(!jobs.length){body.innerHTML='<tr><td colspan="7" class="empty">Belum ada riwayat pemakaian token.</td></tr>';return;}
+  jobs.forEach(job=>{
+    const u=job.usage; const tr=document.createElement('tr');
+    const topic=cell(''); topic.textContent=job.topik; const time=document.createElement('span');time.className='sub';time.textContent=job.created_at || '—';topic.appendChild(time);
+    const model=cell('');model.className='model';model.textContent=u.model || '—';const backend=document.createElement('span');backend.className='sub';backend.textContent=u.backend || '—';model.appendChild(backend);
+    tr.append(topic,model,cell(format(u.prompt_tokens),'num'),cell(format(u.completion_tokens),'num'),cell(format(u.reasoning_tokens),'num'),cell(format(u.total_tokens),'num'));
+    const status=cell('');const badge=document.createElement('span');badge.className='state '+(job.status==='done'?'done':job.status==='error'?'error':'');badge.textContent=job.status==='done'?'Selesai':job.status==='error'?'Gagal':'Diproses';status.appendChild(badge);tr.appendChild(status);body.appendChild(tr);
+  });
+}
+async function loadUsage(){
+  try{const response=await fetch('/api/usage');if(!response.ok)throw new Error('Tidak dapat memuat usage.');const data=await response.json();id('defaultModel').textContent=data.default_model || '—';setTotal(data.total);renderJobs(data.jobs);}
+  catch(error){id('rows').innerHTML='<tr><td colspan="7" class="empty error">'+error.message+'</td></tr>';}
+}
+loadUsage();setInterval(loadUsage,5000);
+</script>
+</body>
+</html>

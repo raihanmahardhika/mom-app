@@ -34,6 +34,10 @@
     font-size:12.5px;color:var(--ink-soft);
     border-left:1px solid var(--line);padding-left:14px;
   }
+  header.top .nav{
+    margin-left:auto;color:var(--accent);font-size:13px;font-weight:600;text-decoration:none;
+  }
+  header.top .nav:hover{text-decoration:underline}
   .wrap{max-width:960px;margin:0 auto;padding:30px 24px 80px}
   .lead{color:var(--ink-soft);font-size:14.5px;margin:0 0 26px;max-width:620px}
   .lead b{color:var(--ink);font-weight:600}
@@ -111,7 +115,14 @@
   .drop.sm{padding:18px 16px}
   .drop.sm .ic{font-size:21px;margin-bottom:4px}
   .drop.sm .main{font-size:13.5px}
-  #fileInput,#pdfInput{display:none}
+  #fileInput,#notesInput{display:none}
+  .note-files{display:grid;gap:7px;margin-top:10px}
+  .note-file{
+    display:flex;align-items:center;gap:9px;padding:8px 10px;background:var(--field);
+    border:1px solid var(--line);border-radius:8px;font-size:12.5px;color:var(--ink-soft);
+  }
+  .note-file .name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+  .note-file .btn-x{width:25px;height:25px;font-size:13px}
 
   .actions{display:flex;gap:12px;align-items:center;margin-top:6px}
   .btn{
@@ -162,12 +173,13 @@
 <header class="top">
   <div class="mark">Notula<b>·</b>MoM</div>
   <div class="tag">Rekaman rapat → notula terstruktur, diproses lokal</div>
+  <a class="nav" href="/usage">Token Usage</a>
 </header>
 
 <div class="wrap">
   <p class="lead">
-    Isi identitas rapat, unggah rekaman dan/atau catatan kasar, lalu sistem akan
-    <b>mentranskripsi</b> (Whisper, lokal di GPU) dan <b>menyusun MoM</b> (GPT-5 nano) dalam format
+    Isi identitas rapat, lalu unggah <b>catatan kasar</b>, <b>rekaman</b>, atau keduanya.
+    Rekaman hanya ditranskripsi bila diunggah; catatan saja tetap dapat disusun menjadi MoM dalam format
     Word yang siap dikirim. Kolom di bawah yang Anda isi sendiri; isi diskusi &
     tindak lanjut digenerate otomatis.
   </p>
@@ -234,24 +246,26 @@
   <!-- 3. Sumber -->
   <div class="card">
     <h2><span class="n">03</span> Sumber Notula</h2>
-    <p class="sub">Unggah rekaman, catatan kasar, atau keduanya.</p>
+    <p class="sub">Pilih minimal satu sumber. Rekaman bersifat opsional; catatan dapat diketik atau diunggah sebagai beberapa dokumen.</p>
     <div class="drop" id="drop" onclick="fileInput.click()">
       <div class="ic">🎙️</div>
-      <div class="main" id="dropMain">Tarik rekaman ke sini atau klik untuk pilih</div>
-      <div class="sub2">Audio/Video — mp3, wav, m4a, mp4, dll.</div>
+      <div class="main" id="dropMain">Tarik rekaman (opsional) ke sini atau klik untuk pilih</div>
+      <div class="sub2">Audio/Video — mp3, wav, m4a, mp4, dll. Bisa beberapa file; ditranskripsi sesuai urutan daftar.</div>
     </div>
-    <input type="file" id="fileInput" accept="audio/*,video/*">
+    <input type="file" id="fileInput" accept="audio/*,video/*" multiple>
+    <div class="note-files" id="recList" aria-live="polite"></div>
     <div class="full" style="margin-top:16px">
       <label>Catatan kasar (opsional)</label>
       <textarea id="catatan" placeholder="Poin-poin mentah yang Anda tulis saat rapat. Membantu akurasi jika rekaman kurang jelas."></textarea>
-      <div class="fieldnote">Boleh diketik di atas, diunggah sebagai PDF di bawah, atau keduanya.</div>
+      <div class="fieldnote">Boleh diketik di atas, diunggah sebagai dokumen di bawah, atau keduanya.</div>
     </div>
-    <div class="drop sm" id="pdfDrop" onclick="pdfInput.click()" style="margin-top:10px">
+    <div class="drop sm" id="notesDrop" onclick="notesInput.click()" style="margin-top:10px">
       <div class="ic">📄</div>
-      <div class="main" id="pdfMain">Tarik catatan PDF ke sini atau klik untuk pilih</div>
-      <div class="sub2">PDF berisi teks — hasil scan/gambar tidak bisa dibaca.</div>
+      <div class="main" id="notesMain">Tarik dokumen catatan ke sini atau klik untuk pilih</div>
+      <div class="sub2">Bisa pilih beberapa PDF, DOCX, TXT, atau MD. PDF hasil scan/gambar tidak bisa dibaca.</div>
     </div>
-    <input type="file" id="pdfInput" accept="application/pdf,.pdf">
+    <input type="file" id="notesInput" accept="application/pdf,.pdf,.docx,.txt,.md,text/plain,text/markdown" multiple>
+    <div class="note-files" id="notesList" aria-live="polite"></div>
   </div>
 
   <!-- 4. Next meeting -->
@@ -270,7 +284,7 @@
   <div class="card" id="progress" style="margin-top:22px">
     <h2><span class="n">→</span> Proses</h2>
     <ul class="steps">
-      <li data-step="transcribe"><span class="dot"></span> Transkripsi audio (Whisper)</li>
+      <li data-step="source"><span class="dot"></span> Memproses sumber notula</li>
       <li data-step="summarize"><span class="dot"></span> Menyusun MoM (GPT-5 nano)</li>
       <li data-step="docx"><span class="dot"></span> Membuat dokumen Word</li>
     </ul>
@@ -290,51 +304,112 @@
 
 <script>
 const fileInput = document.getElementById('fileInput');
-const pdfInput  = document.getElementById('pdfInput');
+const notesInput = document.getElementById('notesInput');
 const drop = document.getElementById('drop');
-const pdfDrop = document.getElementById('pdfDrop');
-const MAX_PDF_MB = 25;
+const notesDrop = document.getElementById('notesDrop');
+const MAX_NOTE_FILE_MB = 25;
+const MAX_NOTE_FILES = 10;
+const MAX_RECORDINGS = 5;
 
-let selectedFile = null;   // rekaman audio/video
-let selectedPdf  = null;   // catatan kasar berformat PDF
+let selectedRecs = [];     // beberapa rekaman audio/video
+let selectedNotes = [];    // beberapa dokumen catatan kasar
 
 const mb = n => (n/1048576).toFixed(1) + ' MB';
 
-function wireDrop(zone, input, onFile){
+function wireMultiDrop(zone, input, onFiles){
   ['dragover','dragenter'].forEach(ev=>zone.addEventListener(ev,e=>{
     e.preventDefault(); zone.classList.add('over');
   }));
   ['dragleave','drop'].forEach(ev=>zone.addEventListener(ev,e=>{
     e.preventDefault(); zone.classList.remove('over');
   }));
-  zone.addEventListener('drop', e=>{
-    if(e.dataTransfer.files.length) onFile(e.dataTransfer.files[0]);
-  });
-  input.addEventListener('change', e=>onFile(e.target.files[0] || null));
+  zone.addEventListener('drop', e=>onFiles([...e.dataTransfer.files]));
+  input.addEventListener('change', e=>onFiles([...e.target.files]));
 }
 
-wireDrop(drop, fileInput, f=>{ selectedFile = f; updateDrop(); });
-wireDrop(pdfDrop, pdfInput, f=>{
-  if(f && !/\.pdf$/i.test(f.name)){
-    alert('Catatan kasar hanya menerima file berformat PDF.'); return;
-  }
-  if(f && f.size > MAX_PDF_MB*1048576){
-    alert('Ukuran PDF melebihi batas ' + MAX_PDF_MB + ' MB.'); return;
-  }
-  selectedPdf = f; updatePdfDrop();
-});
+wireMultiDrop(drop, fileInput, addRecordings);
+wireMultiDrop(notesDrop, notesInput, addNoteFiles);
 
+const sameFile = (a, b) =>
+  a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+
+function addRecordings(files){
+  for(const file of files){
+    const isMedia = /^(audio|video)\//.test(file.type) ||
+      /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|wma|webm|mp4|m4v|mov|mkv|avi|3gp|amr)$/i.test(file.name);
+    if(!isMedia){
+      alert(file.name + ' bukan file audio/video.');
+      continue;
+    }
+    if(selectedRecs.some(item=>sameFile(item, file))) continue;
+    if(selectedRecs.length >= MAX_RECORDINGS){
+      alert('Maksimum ' + MAX_RECORDINGS + ' rekaman dapat diunggah.');
+      break;
+    }
+    selectedRecs.push(file);
+  }
+  fileInput.value = '';
+  updateDrop();
+}
 function updateDrop(){
-  drop.classList.toggle('has', !!selectedFile);
-  document.getElementById('dropMain').textContent = selectedFile
-    ? '✓ ' + selectedFile.name + ' (' + mb(selectedFile.size) + ')'
-    : 'Tarik rekaman ke sini atau klik untuk pilih';
+  drop.classList.toggle('has', selectedRecs.length > 0);
+  document.getElementById('dropMain').textContent = selectedRecs.length
+    ? '✓ ' + selectedRecs.length + ' rekaman dipilih'
+    : 'Tarik rekaman (opsional) ke sini atau klik untuk pilih';
+  renderFileList(document.getElementById('recList'), selectedRecs, updateDrop, true);
 }
-function updatePdfDrop(){
-  pdfDrop.classList.toggle('has', !!selectedPdf);
-  document.getElementById('pdfMain').textContent = selectedPdf
-    ? '✓ ' + selectedPdf.name + ' (' + mb(selectedPdf.size) + ')'
-    : 'Tarik catatan PDF ke sini atau klik untuk pilih';
+function addNoteFiles(files){
+  for(const file of files){
+    if(!/\.(pdf|docx|txt|md)$/i.test(file.name)){
+      alert('Format catatan tidak didukung untuk ' + file.name + '. Gunakan PDF, DOCX, TXT, atau MD.');
+      continue;
+    }
+    if(file.size > MAX_NOTE_FILE_MB*1048576){
+      alert('Ukuran ' + file.name + ' melebihi batas ' + MAX_NOTE_FILE_MB + ' MB.');
+      continue;
+    }
+    if(selectedNotes.some(item=>sameFile(item, file))) continue;
+    if(selectedNotes.length >= MAX_NOTE_FILES){
+      alert('Maksimum ' + MAX_NOTE_FILES + ' dokumen catatan dapat diunggah.');
+      break;
+    }
+    selectedNotes.push(file);
+  }
+  notesInput.value = '';
+  updateNotesDrop();
+}
+function updateNotesDrop(){
+  notesDrop.classList.toggle('has', selectedNotes.length > 0);
+  document.getElementById('notesMain').textContent = selectedNotes.length
+    ? '✓ ' + selectedNotes.length + ' dokumen catatan dipilih'
+    : 'Tarik dokumen catatan ke sini atau klik untuk pilih';
+
+  renderFileList(document.getElementById('notesList'), selectedNotes, updateNotesDrop, false);
+}
+/* Daftar file terpilih; rekaman diberi nomor urut karena urutan transkripsi penting. */
+function renderFileList(list, files, refresh, numbered){
+  list.replaceChildren();
+  files.forEach((file, index)=>{
+    const item = document.createElement('div');
+    item.className = 'note-file';
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = (numbered && files.length > 1 ? (index + 1) + '. ' : '') + file.name;
+    name.title = file.name;
+    const size = document.createElement('span');
+    size.textContent = mb(file.size);
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn-x';
+    remove.setAttribute('aria-label', 'Hapus ' + file.name);
+    remove.textContent = '×';
+    remove.addEventListener('click', ()=>{
+      files.splice(index, 1);
+      refresh();
+    });
+    item.append(name, size, remove);
+    list.appendChild(item);
+  });
 }
 
 /* ---------- Hari & Tanggal ---------- */
@@ -436,8 +511,8 @@ const val = id=>document.getElementById(id).value.trim();
 
 async function generate(){
   const catatan = val('catatan');
-  if(!selectedFile && !catatan && !selectedPdf){
-    alert('Unggah rekaman, isi catatan kasar, atau unggah catatan PDF terlebih dahulu.');
+  if(!selectedRecs.length && !catatan && !selectedNotes.length){
+    alert('Unggah rekaman, isi catatan kasar, atau unggah dokumen catatan terlebih dahulu.');
     return;
   }
   if(!jamValid()){
@@ -457,8 +532,8 @@ async function generate(){
   fd.append('kehadiran', JSON.stringify(collectKehadiran()));
   fd.append('next_meetings', JSON.stringify(collectNm()));
   fd.append('catatan', catatan);
-  if(selectedFile) fd.append('recording', selectedFile);
-  if(selectedPdf) fd.append('catatan_pdf', selectedPdf);
+  selectedRecs.forEach(file=>fd.append('recordings', file));
+  selectedNotes.forEach(file=>fd.append('catatan_files', file));
 
   document.getElementById('genBtn').disabled = true;
   document.getElementById('progress').style.display='block';
@@ -479,10 +554,10 @@ async function generate(){
   poll(data.job_id);
 }
 
-function showError(pesan){
+function showError(pesan, label='Gagal: '){
   const e = document.getElementById('errBox');
   e.style.display='block';
-  e.textContent = 'Gagal: ' + pesan;
+  e.textContent = label + pesan;
   document.getElementById('genBtn').disabled = false;
 }
 
@@ -491,8 +566,8 @@ function resetSteps(){
   document.getElementById('barFill').style.width='0%';
 }
 function markSteps(step){
-  const order=['transcribe','summarize','docx'];
-  const map={'Transkripsi':'transcribe','Menyusun':'summarize','Word':'docx','Selesai':'docx'};
+  const order=['source','summarize','docx'];
+  const map={'Transkripsi':'source','Membaca':'source','Menyusun':'summarize','Word':'docx','Selesai':'docx'};
   let cur=null;
   for(const k in map){ if(step.includes(k)){cur=map[k];break;} }
   const ci = order.indexOf(cur);
@@ -519,6 +594,7 @@ async function poll(job_id){
     document.getElementById('barFill').style.width='100%';
     document.getElementById('dlLink').href='/api/download/'+job_id;
     document.getElementById('resultBox').style.display='block';
+    if(s.peringatan) showError(s.peringatan, 'Peringatan: ');
     // transkrip
     const tr = await (await fetch('/api/transcript/'+job_id)).json();
     if(tr.transcript){

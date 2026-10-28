@@ -1,14 +1,17 @@
 # Notula — Generator MoM (Whisper GPU + GPT-5 nano)
 
-Aplikasi web untuk mengubah **rekaman rapat** menjadi **Minutes of Meeting (MoM)**
-berformat Word, dengan format yang meniru template MoM RSM Indonesia.
+Aplikasi web untuk mengubah **catatan kasar, rekaman rapat, atau keduanya** menjadi
+**Minutes of Meeting (MoM)** berformat Word, dengan format yang meniru template MoM
+RSM Indonesia.
 
 - **Transkripsi**: OpenAI Whisper (`faster-whisper`) — berjalan **lokal di GPU Anda**.
 - **Penyusunan MoM**: **OpenAI gpt-5-nano** (default), atau LLM lokal via **Ollama**,
   atau ekstraktor berbasis-aturan bila keduanya tidak tersedia.
 
 Kolom header (Klien, Penugasan, Topik, dll.) diisi manual di UI. Isi **Diskusi**
-dan **Tindak Lanjut** digenerate otomatis dari transkrip + catatan kasar.
+dan **Tindak Lanjut** digenerate otomatis dari transkrip dan/atau catatan kasar.
+Catatan dapat diketik langsung atau diunggah dalam beberapa file PDF, DOCX, TXT,
+atau Markdown.
 
 > **Catatan privasi:** transkrip dikirim ke API OpenAI saat penyusunan MoM.
 > Untuk rapat yang datanya tidak boleh keluar (mis. proyek pemerintah), set
@@ -57,7 +60,9 @@ Setting penting lainnya (nilai default sudah sesuai untuk GPU 6 GB):
 | `WHISPER_MODEL` | `small` | `tiny`/`base`/`small`/`medium`/`large-v3` |
 | `WHISPER_DEVICE` | `cuda` | `cuda` (GPU) / `cpu` / `auto` |
 | `WHISPER_COMPUTE` | `float16` | `float16` untuk GPU, `int8` untuk CPU |
-| `MAX_PDF_MB` | `25` | batas ukuran PDF catatan kasar |
+| `MAX_NOTE_FILE_MB` | `25` | batas ukuran setiap dokumen catatan |
+| `MAX_NOTE_FILES` | `10` | jumlah maksimum dokumen catatan per MoM |
+| `MAX_RECORDINGS` | `5` | jumlah maksimum rekaman per MoM |
 
 Bila GPU gagal dipakai (driver/VRAM/cuDNN), aplikasi **otomatis turun ke CPU**
 dan tetap berjalan — pesannya muncul di konsol server.
@@ -73,6 +78,12 @@ Buka browser: **http://localhost:8000**
 Cek kesiapan setup kapan saja lewat **http://localhost:8000/api/health** —
 endpoint ini melaporkan status API key, paket yang terpasang, dan ffmpeg.
 
+Pantau token yang dipakai setiap proses MoM lewat **http://localhost:8000/usage**.
+Halaman tersebut menampilkan token input, output, reasoning (bila dilaporkan
+model), total historis, serta backend/model yang benar-benar dipakai. Riwayat
+disimpan secara lokal di `data/token_usage_history.json`, sehingga tetap ada
+setelah server direstart.
+
 ## 5. Cara pakai
 
 1. Isi **Identitas Rapat**:
@@ -81,13 +92,20 @@ endpoint ini melaporkan status API key, paket yang terpasang, dan ffmpeg.
      durasi rapat ditampilkan otomatis.
    - **Metode Rapat** → pilih **Offline / Online / Hybrid**.
 2. Isi **Kehadiran** — kelompokkan per instansi, satu nama per baris.
-3. Unggah **rekaman** rapat, dan/atau isi **catatan kasar** (ketik manual
-   dan/atau unggah **file PDF**).
+3. Pilih minimal satu sumber notula:
+   - isi **catatan kasar** langsung di aplikasi;
+   - unggah satu atau beberapa file catatan **PDF, DOCX, TXT, atau MD**; dan/atau
+   - unggah satu atau beberapa **rekaman** rapat (mis. rapat yang terpotong
+     menjadi beberapa file). Rekaman bersifat opsional, ditranskripsi berurutan
+     sesuai daftar, lalu transkripnya digabung menjadi satu MoM.
 4. (opsional) Isi **rencana rapat berikutnya**.
 5. Klik **Buat MoM** → tunggu proses → **Unduh MoM (.docx)**.
 
 > PDF hasil **scan/foto** tidak punya layer teks sehingga tidak bisa dibaca —
-> aplikasi akan memberi tahu dan Anda bisa mengetik catatan manual.
+> aplikasi akan memberi tahu dan Anda dapat memakai catatan manual atau dokumen lain.
+
+Bagian **Expected Next Meeting(s)** tidak akan disertakan dalam MoM jika seluruh
+baris rencana rapat dibiarkan kosong.
 
 ---
 
@@ -113,7 +131,8 @@ mom-app/
 │  ├─ core/
 │  │  ├─ transcribe.py        # Whisper (GPU, model di-cache)
 │  │  ├─ summarize.py         # gpt-5-nano -> Ollama -> rule-based
-│  │  ├─ pdf_extract.py       # ekstraksi teks catatan kasar PDF
+│  │  ├─ note_extract.py      # ekstraksi teks PDF, DOCX, TXT, dan MD
+│  │  ├─ pdf_extract.py       # ekstraksi teks PDF
 │  │  ├─ datetime_id.py       # format tanggal & jam Bahasa Indonesia
 │  │  └─ docx_builder.py      # render .docx sesuai format template
 │  └─ templates/index.html    # UI

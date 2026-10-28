@@ -7,7 +7,7 @@ Struktur:
                      Jam | Metode Rapat | Lokasi | Kehadiran (2 grup)
   2. Blok Diskusi  : "Hasil diskusi:" + poin-poin bernomor & bullet
   3. Tabel Tindak Lanjut : No | Tindak Lanjut | Ref | PIC | Target
-  4. Tabel Expected Next Meeting(s)
+  4. Tabel Expected Next Meeting(s), bila rencana rapat berikutnya diisi
 
 Semua tabel memakai lebar total yang sama (selebar area cetak) dengan
 layout FIXED, sehingga tepinya lurus satu sama lain.
@@ -24,6 +24,7 @@ from docx.oxml import OxmlElement
 FONT_NAME = "Arial"          # semua teks memakai Arial
 SIZE_TITLE = 18              # judul bar: "Risalah Rapat", "Diskusi", "Tindak Lanjut"
 SIZE_BODY = 11               # SEMUA teks lainnya
+DISCUSSION_LINE_SPACING = 1.5
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "assets", "logo_rsm.png")
 LOGO_W_CM = 2.69
 LOGO_H_CM = 1.13
@@ -133,12 +134,12 @@ def _set_table_layout(table, total, bobot):
     return lebar
 
 
-def _rapatkan(p, before=0, after=0):
+def _rapatkan(p, before=0, after=0, line_spacing=1.0):
     """Buang jarak antar-paragraf bawaan Word (docDefaults: after 8pt, line 1.08)."""
     pf = p.paragraph_format
     pf.space_before = Pt(before)
     pf.space_after = Pt(after)
-    pf.line_spacing = 1.0
+    pf.line_spacing = line_spacing
     return p
 
 
@@ -171,32 +172,27 @@ def _cell_text(cell, text, bold=False, size=SIZE_BODY, align=None, color=None,
     return p
 
 
-def _add_para(cell_or_doc, text, bold=False, size=SIZE_BODY, bullet=False, num=None):
+def _add_para(cell_or_doc, text, bold=False, size=SIZE_BODY, bullet=False, num=None,
+              line_spacing=1.0):
     """
     Paragraf isi diskusi.
 
     bullet=True memakai style "List Bullet" bawaan Word — bullet sungguhan yang
-    terhubung ke definisi numbering, bukan karakter "•" yang diketik manual.
-    Bila style tidak ada di template, jatuh ke karakter manual agar tetap terbaca.
+    terhubung ke definisi numbering, bukan karakter yang diketik manual.
     """
-    manual = False
     if bullet:
         try:
             p = cell_or_doc.add_paragraph(style=BULLET_STYLE)
         except KeyError:
             p = cell_or_doc.add_paragraph()
-            manual = True
         p.paragraph_format.left_indent = Inches(0.5)
     else:
         p = cell_or_doc.add_paragraph()
 
     # Rata kanan-kiri agar blok diskusi terlihat rapi saat teksnya panjang.
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    _rapatkan(p, before=2, after=2)
+    _rapatkan(p, before=2, after=2, line_spacing=line_spacing)
 
-    if manual:
-        run = p.add_run("•  ")
-        _set_run_font(run, size)
     if num is not None:
         run = p.add_run(f"{num}. ")
         _set_run_font(run, size, bold=True)
@@ -218,7 +214,7 @@ def build_mom(data: dict, out_path: str):
       "metode": str,
       "lokasi": str,
       "kehadiran": [ {"grup": str, "orang": [str, ...]}, ... ],
-      "diskusi": [ {"judul": str, "poin": [str, ...]}, ... ],
+      "diskusi": [ {"judul": str, "narasi": [str, ...], "poin": [str, ...]}, ... ],
       "tindak_lanjut": [ {"tindak_lanjut": str, "ref": str, "pic": str, "target": str}, ... ],
       "next_meetings": [ {"nama": str, "tanggal": str, "catatan": str}, ... ],
     }
@@ -256,8 +252,9 @@ def build_mom(data: dict, out_path: str):
     _build_diskusi(doc, data, total)
     doc.add_paragraph()
     _build_tindak_lanjut(doc, data, total)
-    doc.add_paragraph()
-    _build_next_meetings(doc, data, total)
+    if _has_next_meetings(data.get("next_meetings", [])):
+        doc.add_paragraph()
+        _build_next_meetings(doc, data, total)
 
     doc.save(out_path)
     return out_path
@@ -387,8 +384,21 @@ def _build_diskusi(doc, data, total):
 
     for i, sec in enumerate(data.get("diskusi", []), start=1):
         _add_para(cell, sec.get("judul", ""), bold=True, size=SIZE_BODY, num=i)
+        for narasi in sec.get("narasi", []):
+            _add_para(
+                cell,
+                narasi,
+                size=SIZE_BODY,
+                line_spacing=DISCUSSION_LINE_SPACING,
+            )
         for poin in sec.get("poin", []):
-            _add_para(cell, poin, size=SIZE_BODY, bullet=True)
+            _add_para(
+                cell,
+                poin,
+                size=SIZE_BODY,
+                bullet=True,
+                line_spacing=DISCUSSION_LINE_SPACING,
+            )
 
     endp = cell.add_paragraph()
     endp.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -439,7 +449,15 @@ def _build_tindak_lanjut(doc, data, total):
 
 
 def _build_next_meetings(doc, data, total):
-    nm = data.get("next_meetings", [])
+    nm = [
+        meeting for meeting in data.get("next_meetings", [])
+        if isinstance(meeting, dict) and any(
+            str(meeting.get(key, "") or "").strip()
+            for key in ("nama", "tanggal", "catatan")
+        )
+    ]
+    if not nm:
+        return
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
     _rapatkan(p, before=0, after=4)
@@ -447,7 +465,7 @@ def _build_next_meetings(doc, data, total):
     _set_run_font(r, SIZE_BODY, bold=True)
     r.italic = True
 
-    rows = 1 + max(1, len(nm))
+    rows = 1 + len(nm)
     table = doc.add_table(rows=rows, cols=4)
     _set_table_borders(table)
     _set_table_layout(table, total, BOBOT_NEXT)
@@ -458,20 +476,27 @@ def _build_next_meetings(doc, data, total):
                    align=WD_ALIGN_PARAGRAPH.CENTER, valign=WD_ALIGN_VERTICAL.CENTER)
         _set_cell_bg(table.rows[0].cells[i], "F2F2F2")
 
-    if not nm:
-        _cell_text(table.rows[1].cells[0], "1.", size=SIZE_BODY,
+    for idx, m in enumerate(nm, start=1):
+        row = table.rows[idx]
+        _cell_text(row.cells[0], f"{idx}.", size=SIZE_BODY,
                    align=WD_ALIGN_PARAGRAPH.CENTER, valign=WD_ALIGN_VERTICAL.TOP)
-    else:
-        for idx, m in enumerate(nm, start=1):
-            row = table.rows[idx]
-            _cell_text(row.cells[0], f"{idx}.", size=SIZE_BODY,
-                       align=WD_ALIGN_PARAGRAPH.CENTER, valign=WD_ALIGN_VERTICAL.TOP)
-            _cell_text(row.cells[1], m.get("nama", ""), size=SIZE_BODY,
-                       valign=WD_ALIGN_VERTICAL.TOP)
-            _cell_text(row.cells[2], m.get("tanggal", ""), size=SIZE_BODY,
-                       valign=WD_ALIGN_VERTICAL.TOP)
-            _cell_text(row.cells[3], m.get("catatan", ""), size=SIZE_BODY,
-                       valign=WD_ALIGN_VERTICAL.TOP)
+        _cell_text(row.cells[1], m.get("nama", ""), size=SIZE_BODY,
+                   valign=WD_ALIGN_VERTICAL.TOP)
+        _cell_text(row.cells[2], m.get("tanggal", ""), size=SIZE_BODY,
+                   valign=WD_ALIGN_VERTICAL.TOP)
+        _cell_text(row.cells[3], m.get("catatan", ""), size=SIZE_BODY,
+                   valign=WD_ALIGN_VERTICAL.TOP)
+
+
+def _has_next_meetings(meetings) -> bool:
+    """True hanya bila ada minimal satu rencana rapat yang berisi data."""
+    return any(
+        isinstance(meeting, dict) and any(
+            str(meeting.get(key, "") or "").strip()
+            for key in ("nama", "tanggal", "catatan")
+        )
+        for meeting in (meetings or [])
+    )
 
 
 if __name__ == "__main__":

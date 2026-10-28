@@ -6,3 +6,5 @@ data/uploads/*
 data/outputs/*
 !data/uploads/.gitkeep
 !data/outputs/.gitkeep
+data/token_usage_history.json
+data/token_usage_history.tmp

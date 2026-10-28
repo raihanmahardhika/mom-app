@@ -42,8 +42,13 @@ OPENAI_BASE_URL = _s("OPENAI_BASE_URL") or None      # None = api.openai.com
 # gpt-5-nano adalah reasoning model: "minimal" paling cepat & murah untuk
 # tugas ekstraksi terstruktur seperti ini.
 OPENAI_REASONING_EFFORT = _s("OPENAI_REASONING_EFFORT", "minimal").lower()
-OPENAI_MAX_OUTPUT_TOKENS = _i("OPENAI_MAX_OUTPUT_TOKENS", 16000)
+# Anggaran output dipotong dari context window model; MoM biasanya < 3k token.
+# Nilai terlalu besar membuat input yang muat makin kecil (mis. gemma 32k).
+OPENAI_MAX_OUTPUT_TOKENS = _i("OPENAI_MAX_OUTPUT_TOKENS", 6000)
 OPENAI_TIMEOUT = _i("OPENAI_TIMEOUT", 600)
+
+# Transkrip yang melebihi context window dipecah per bagian sepanjang ini (karakter).
+LLM_CHUNK_CHARS = _i("LLM_CHUNK_CHARS", 30000)
 
 OLLAMA_URL = _s("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = _s("OLLAMA_MODEL", "qwen2.5:14b-instruct")
@@ -58,7 +63,10 @@ WHISPER_BEAM_SIZE = _i("WHISPER_BEAM_SIZE", 5)
 
 # ---------------------------------------------------------------- Upload
 DATA_DIR = Path(_s("MOM_DATA_DIR") or (BASE_DIR / "data"))
-MAX_PDF_MB = _i("MAX_PDF_MB", 25)
+# MAX_PDF_MB dipertahankan sebagai fallback agar konfigurasi lama tetap berlaku.
+MAX_NOTE_FILE_MB = _i("MAX_NOTE_FILE_MB", _i("MAX_PDF_MB", 25))
+MAX_NOTE_FILES = _i("MAX_NOTE_FILES", 10)
+MAX_RECORDINGS = _i("MAX_RECORDINGS", 5)
 
 
 def _key_state() -> str:
@@ -94,6 +102,12 @@ def health() -> dict:
             "bahasa": WHISPER_LANGUAGE,
             "paket_faster_whisper": _has("faster_whisper"),
         },
-        "pdf": {"paket_pypdf": _has("pypdf")},
+        "catatan": {
+            "format": ["PDF", "DOCX", "TXT", "MD"],
+            "maks_file": MAX_NOTE_FILES,
+            "maks_ukuran_mb_per_file": MAX_NOTE_FILE_MB,
+            "paket_pypdf": _has("pypdf"),
+        },
+        "rekaman": {"maks_file": MAX_RECORDINGS},
         "ffmpeg": shutil.which("ffmpeg") is not None,
     }
